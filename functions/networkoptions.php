@@ -60,8 +60,6 @@ function amu_add_from_net() {
 			//if no post made, show interface and helpers
 			if (empty($_POST) || wp_verify_nonce( $_POST['nonce'], 'choose site' ) ) {
 				
-				
-				
 				amu_show_network_users();
 				
 			} else if ( isset($_POST['addexistingusers'] ) && wp_verify_nonce( $_POST['nonce'],  $_POST['b'].'primary-blog-nonce' ) ) {
@@ -156,14 +154,14 @@ function amu_show_network_users() {
 		
 		$all_blogs = get_blogs_of_user( get_current_user_id() );
 		
+		
+		$request_blog_id = ( isset($_REQUEST['pb']) ? (int)$_REQUEST['pb'] : false );
 		if ( count( $all_blogs ) > 1 ) {
 			$found = false;
 			
-			
 			?>
-			<select name="primary_blog">
+			<select name="pb">
 				<?php foreach( (array) $all_blogs as $blog ):
-					
 					
 					switch_to_blog( $blog->userblog_id );
 					
@@ -172,11 +170,11 @@ function amu_show_network_users() {
 					if( current_user_can('list_users') && $blog->userblog_id != $current_blog_id ) :
 						$blog_ids[] = $blog->userblog_id;
 						
-						if( isset($_POST['primary_blog']) && $_POST['primary_blog'] == $blog->userblog_id )
+						if( $request_blog_id == $blog->userblog_id )
 							$amu_current_blog = $blog;
 						
 						
-						?><option value="<?php echo $blog->userblog_id ?>" <?php selected($blog->userblog_id, $_POST['primary_blog'] );?> ><?php echo esc_url( get_home_url( $blog->userblog_id ) ); ?> </option><?php
+						?><option value="<?php echo $blog->userblog_id ?>" <?php selected($blog->userblog_id, $request_blog_id );?> ><?php echo esc_url( get_home_url( $blog->userblog_id ) ); ?> </option><?php
 						endif;
 					restore_current_blog();
 				endforeach; ?>
@@ -189,16 +187,14 @@ function amu_show_network_users() {
 	<!-- end of choose from -->
 	<?php
 	
-	if( isset( $_POST['primary_blog'] ) &&  wp_verify_nonce( $_POST['nonce'], 'choose site' ) && in_array( $_POST['primary_blog'], $blog_ids ) ):
+	if( $request_blog_id != false && wp_verify_nonce( $_REQUEST['nonce'], 'choose site' ) && in_array( $request_blog_id, $blog_ids ) ):
 	
 	
 	echo '<form method="post" enctype="multipart/form-data" class="amuform">';
 	$amd_current_site_info = get_current_site_name($amu_current_blog);
 	
-	
-	
-	echo '<input type="hidden" name="b" value="'.esc_attr( $_POST['primary_blog']).'" />';
-	echo '<input type="hidden" value="'.wp_create_nonce( $_POST['primary_blog'].'primary-blog-nonce' ).'" name="nonce" />';
+	echo '<input type="hidden" name="b" value="'.esc_attr( $request_blog_id ).'" />';
+	echo '<input type="hidden" value="'.wp_create_nonce( $request_blog_id.'primary-blog-nonce' ).'" name="nonce" />';
 		//get this blogs id
 		
 		$mainsite = SITE_ID_CURRENT_SITE;
@@ -206,15 +202,22 @@ function amu_show_network_users() {
 
 		echo '<h3>2. '.__('Add User from','amulang').' <em>'.$amd_current_site_info->blogname.'</em> ('.$amd_current_site_info->siteurl.')</h3>';
 		
+		$offset = (isset($_GET['offset']) ? (int) $_GET['offset'] : 0);
+		$number = ( ( isset($_GET['number']) && $_GET['number'] < 20 ) ? (int) $_GET['number'] : 10);
 		//show users list
-		$args = array('blog_id'      => $_POST['primary_blog'] );
+		//$number = 10;
+		
+		$args = array( 'offset' => $offset, 'number'=> $number, 'exclude'=> get_current_user_id());
+		
+		switch_to_blog( $request_blog_id );
 		
 		$allusers = get_users( $args );
 		
+		$total_users = count_users();
 		
-		//show multisite options wrapped in genoption
+		restore_current_blog();
 		
-		
+	
 		$roles = $wp_roles->get_names();
 		//set all users to this role?
 		echo '<div class="optionbox">';
@@ -242,12 +245,44 @@ function amu_show_network_users() {
 		//end multisite options wrap
 		
 		
+		
 		echo '	<h3><strong>'.__('Select network users to add to this site','amulang').':</strong></h3>';
 		
-		ob_start();
+		
+		$total_users = $total_users['total_users'];
+		$next_offset = $offset+$number;
+		$previous_offset = $offset-$number;
 		?>
+		<div class="tablenav top">
+			<div class="tablenav-pages">
+				<span class="displaying-num" alt="This number might not be accurate">maximum <?php echo ($total_users-1); ?> users</span>
+				<span class="pagination-links">
+		<?php
+		if( $offset > 0 ): 
 			
+			$previous_link = admin_url( 'users.php?page=amuaddfromnet&offset='.($previous_offset).'&pb='.$request_blog_id.'&nonce='.$_REQUEST['nonce'] ); 
+			?>
+			<a href="<?php echo $previous_link; ?>" title="Go to the previous page"  class="prev-page ">« previous page</a>
+			<?php 
+		
+		endif; 
+		
+		if( ( $total_users-1 ) > $next_offset ):
+		
+			$next_link = admin_url( 'users.php?page=amuaddfromnet&offset='.($next_offset).'&pb='.$request_blog_id.'&nonce='.$_REQUEST['nonce'] );
+			?>
+			<a href="<?php echo $next_link; ?>" title="Go to the next page" class="next-page">next page »</a> 
+			<?php 
 			
+		endif;
+		
+		?>
+				</span>
+			</div>	
+			<br class="clear">
+		</div>
+		<?php ob_start(); ?>
+		
 		<table cellspacing="0" class="wp-list-table widefat fixed posts">
 		<thead>
 			<tr>
